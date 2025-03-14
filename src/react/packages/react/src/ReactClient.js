@@ -6,6 +6,16 @@
  *
  * @flow
  */
+
+
+/**
+ * 导出 React 核心 API ：该文件汇集并导出了 React 的所有公共 API，包括：
+- 组件类（ Component 、 PureComponent ）
+- Hooks（ useState 、 useEffect 、 useContext 等）
+- 元素创建函数（ createElement 、 cloneElement ）
+- 特殊组件类型（ Fragment 、 Suspense 、 StrictMode 等）
+ */
+
 import ReactVersion from 'shared/ReactVersion';
 import {
   REACT_FRAGMENT_TYPE,
