@@ -72,8 +72,8 @@ export function useContext<T>(Context: ReactContext<T>): T {
 export function useState<S>(
   initialState: (() => S) | S,
 ): [S, Dispatch<BasicStateAction<S>>] {
-  // 获取当前的 dispatcher
   
+  // 获取当前的 dispatcher
   const dispatcher = resolveDispatcher();
   // 将实际的 useState 实现委托给这个 dispatcher
   return dispatcher.useState(initialState);

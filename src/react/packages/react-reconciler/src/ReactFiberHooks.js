@@ -204,20 +204,12 @@ export type Hook = {
   next: Hook | null,
 };
 
-// The effect "instance" is a shared object that remains the same for the entire
-// lifetime of an effect. In Rust terms, a RefCell. We use it to store the
-// "destroy" function that is returned from an effect, because that is stateful.
-// The field is `undefined` if the effect is unmounted, or if the effect ran
-// but is not stateful. We don't explicitly track whether the effect is mounted
-// or unmounted because that can be inferred by the hiddenness of the fiber in
-// the tree, i.e. whether there is a hidden Offscreen fiber above it.
+// effect "实例"是一个在effect整个生命周期保持不变的共享对象（类似Rust的RefCell）
+// 用于存储effect返回的"destroy"清理函数，该函数可能包含状态
+// 当effect卸载或运行后无状态时，该字段为`undefined`
+// 不显式跟踪effect的挂载状态，因其可通过fiber在树中的隐藏性推断（如上方是否存在隐藏的Offscreen fiber）
 //
-// It's unfortunate that this is stored on a separate object, because it adds
-// more memory per effect instance, but it's conceptually sound. I think there's
-// likely a better data structure we could use for effects; perhaps just one
-// array of effect instances per fiber. But I think this is OK for now despite
-// the additional memory and we can follow up with performance
-// optimizations later.
+// 当前存储方式虽增加内存开销，但概念合理。未来可能优化为每个fiber使用单个effect实例数组
 type EffectInstance = {
   resource: {...} | void | null,
   destroy: void | (() => void) | ((resource: {...} | void | null) => void),
@@ -288,21 +280,16 @@ type Dispatch<A> = A => void;
 
 // These are set right before calling the component.
 let renderLanes: Lanes = NoLanes;
-// The work-in-progress fiber. I've named it differently to distinguish it from
-// the work-in-progress hook.
+// work-in-progress fiber。此处命名不同以区别于正在处理的hook（work-in-progress hook）
 let currentlyRenderingFiber: Fiber = (null: any);
 
-// Hooks are stored as a linked list on the fiber's memoizedState field. The
-// current hook list is the list that belongs to the current fiber. The
-// work-in-progress hook list is a new list that will be added to the
-// work-in-progress fiber.
+// Hook以链表形式存储在fiber的memoizedState字段中。
+// current hook链表属于当前fiber，work-in-progress hook链表是将被添加到新fiber的新链表
 let currentHook: Hook | null = null;
 let workInProgressHook: Hook | null = null;
 
-// Whether an update was scheduled at any point during the render phase. This
-// does not get reset if we do another render pass; only when we're completely
-// finished evaluating this component. This is an optimization so we know
-// whether we need to clear render phase updates after a throw.
+// 标识在render阶段是否调度过更新。该状态在重复render时不会重置，仅在完全完成组件评估后重置。
+// 此优化用于判断在抛出异常后是否需要清除render阶段的更新
 let didScheduleRenderPhaseUpdate: boolean = false;
 // Where an update was scheduled only during the current render pass. This
 // gets reset after each attempt.
@@ -549,12 +536,12 @@ function areHookInputsEqual(
 }
 
 export function renderWithHooks<Props, SecondArg>(
-  current: Fiber | null,
-  workInProgress: Fiber,
-  Component: (p: Props, arg: SecondArg) => any,
-  props: Props,
-  secondArg: SecondArg,
-  nextRenderLanes: Lanes,
+  current: Fiber | null,  // 当前页面使用的Fiber结构
+  workInProgress: Fiber,  // 新的Fiber结构
+  Component: (p: Props, arg: SecondArg) => any,  // 组件函数
+  props: Props,  // 组件属性
+  secondArg: SecondArg,  // 组件第二个参数
+  nextRenderLanes: Lanes,  // 下一次的渲染优先级
 ): any {
   renderLanes = nextRenderLanes;
   currentlyRenderingFiber = workInProgress;
@@ -572,9 +559,9 @@ export function renderWithHooks<Props, SecondArg>(
     warnIfAsyncClientComponent(Component);
   }
 
-  workInProgress.memoizedState = null;
-  workInProgress.updateQueue = null;
-  workInProgress.lanes = NoLanes;
+  workInProgress.memoizedState = null;  // 重置memoizedState
+  workInProgress.updateQueue = null;  // 重置updateQueue
+  workInProgress.lanes = NoLanes;  // 重置lanes
 
   // The following should have already been reset
   // currentHook = null;
@@ -1025,7 +1012,10 @@ export function resetHooksOnUnwind(workInProgress: Fiber): void {
   thenableState = null;
 }
 
+// 组件挂载阶段创建并一个新的 Hook 对象，添加到正在处理的 Fiber 节点的 memoizedState 链表中
+// 实际上就是给fiber生成hook链表
 function mountWorkInProgressHook(): Hook {
+  // 定义新的hook对象
   const hook: Hook = {
     memoizedState: null,
 
@@ -1035,14 +1025,16 @@ function mountWorkInProgressHook(): Hook {
 
     next: null,
   };
-
+  
   if (workInProgressHook === null) {
-    // This is the first hook in the list
+    // 正在处理的Fiber节点的memoizedState为空，则将新的hook对象作为链表的头节点
     currentlyRenderingFiber.memoizedState = workInProgressHook = hook;
+    
   } else {
-    // Append to the end of the list
+    // 将新的hook对象添加到链表的末尾
     workInProgressHook = workInProgressHook.next = hook;
   }
+  
   return workInProgressHook;
 }
 
@@ -1909,6 +1901,7 @@ function forceStoreRerender(fiber: Fiber) {
   }
 }
 
+// 获取当前hook 定义新的quene 设置hook初始值和quene 并返回hook
 function mountStateImpl<S>(initialState: (() => S) | S): Hook {
   const hook = mountWorkInProgressHook();
   if (typeof initialState === 'function') {
@@ -1940,20 +1933,28 @@ function mountStateImpl<S>(initialState: (() => S) | S): Hook {
 function mountState<S>(
   initialState: (() => S) | S,
 ): [S, Dispatch<BasicStateAction<S>>] {
+  // 获取当前hook对象
   const hook = mountStateImpl(initialState);
+  // 从 hook 中获取 queue
   const queue = hook.queue;
+  console.log(hook);
+  
+  // 将 dispatch 绑定到 queue 上  dispatchSetState是最关键的状态更新函数
   const dispatch: Dispatch<BasicStateAction<S>> = (dispatchSetState.bind(
     null,
     currentlyRenderingFiber,
     queue,
   ): any);
+  // 将 dispatch 绑定到 queue 上
   queue.dispatch = dispatch;
+
   return [hook.memoizedState, dispatch];
 }
 
 function updateState<S>(
   initialState: (() => S) | S,
 ): [S, Dispatch<BasicStateAction<S>>] {
+  // hook 更新
   return updateReducer(basicStateReducer, initialState);
 }
 
@@ -3748,7 +3749,7 @@ function dispatchSetState<S, A>(
       );
     }
   }
-
+  // 
   const lane = requestUpdateLane(fiber);
   const didScheduleUpdate = dispatchSetStateInternal(
     fiber,
