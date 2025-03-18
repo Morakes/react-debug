@@ -3733,6 +3733,10 @@ function dispatchReducerAction<S, A>(
   markUpdateInDevTools(fiber, lane, action);
 }
 
+/**
+ * 处理更新的优先级分配
+ * 确保更新的正确调度和追踪
+ */
 function dispatchSetState<S, A>(
   fiber: Fiber,
   queue: UpdateQueue<S, A>,
@@ -3749,8 +3753,11 @@ function dispatchSetState<S, A>(
       );
     }
   }
-  // 
+
+  // 为本次状态更新请求一个优先级（lane）
   const lane = requestUpdateLane(fiber);
+
+  // 调用内部方法处理实际的状态更新 并返回一个布尔值，表示是否调度了更新
   const didScheduleUpdate = dispatchSetStateInternal(
     fiber,
     queue,
@@ -3760,6 +3767,7 @@ function dispatchSetState<S, A>(
   if (didScheduleUpdate) {
     startUpdateTimerByLane(lane);
   }
+  // 在 React DevTools 中标记这次更新，便于调试
   markUpdateInDevTools(fiber, lane, action);
 }
 
@@ -3769,26 +3777,28 @@ function dispatchSetStateInternal<S, A>(
   action: A,
   lane: Lane,
 ): boolean {
+  // 创建一个新的更新对象
   const update: Update<S, A> = {
-    lane,
-    revertLane: NoLane,
-    action,
-    hasEagerState: false,
-    eagerState: null,
-    next: (null: any),
+    lane, // 更新的优先级
+    revertLane: NoLane, // 用于回退的优先级
+    action, // 状态更新动作
+    hasEagerState: false, // 是否已经预计算了新状态
+    eagerState: null, // 预计算的新状态值
+    next: (null: any),  // 链表中的下一个更新
   };
-
+  // 检查是否是渲染阶段更新
   if (isRenderPhaseUpdate(fiber)) {
+    // 如果当前正在渲染阶段，将更新添加到渲染阶段的更新队列中
     enqueueRenderPhaseUpdate(queue, update);
   } else {
+    // 非渲染阶段更新的处理
     const alternate = fiber.alternate;
+    // 检查是否可以进行状态预计算
     if (
       fiber.lanes === NoLanes &&
       (alternate === null || alternate.lanes === NoLanes)
     ) {
-      // The queue is currently empty, which means we can eagerly compute the
-      // next state before entering the render phase. If the new state is the
-      // same as the current state, we may be able to bail out entirely.
+      // 尝试进行状态预计算优化
       const lastRenderedReducer = queue.lastRenderedReducer;
       if (lastRenderedReducer !== null) {
         let prevDispatcher = null;
@@ -3797,25 +3807,21 @@ function dispatchSetStateInternal<S, A>(
           ReactSharedInternals.H = InvalidNestedHooksDispatcherOnUpdateInDEV;
         }
         try {
+          // 计算新状态
           const currentState: S = (queue.lastRenderedState: any);
           const eagerState = lastRenderedReducer(currentState, action);
-          // Stash the eagerly computed state, and the reducer used to compute
-          // it, on the update object. If the reducer hasn't changed by the
-          // time we enter the render phase, then the eager state can be used
-          // without calling the reducer again.
+
+          // 保存预计算状态
           update.hasEagerState = true;
           update.eagerState = eagerState;
+          // 较新旧状态是否相同
           if (is(eagerState, currentState)) {
-            // Fast path. We can bail out without scheduling React to re-render.
-            // It's still possible that we'll need to rebase this update later,
-            // if the component re-renders for a different reason and by that
-            // time the reducer has changed.
-            // TODO: Do we still need to entangle transitions in this case?
+            // 相同则不调度更新
             enqueueConcurrentHookUpdateAndEagerlyBailout(fiber, queue, update);
             return false;
           }
         } catch (error) {
-          // Suppress the error. It will throw again in the render phase.
+          // Suppress the error. It will throw again in the render phase
         } finally {
           if (__DEV__) {
             ReactSharedInternals.H = prevDispatcher;
