@@ -3936,24 +3936,31 @@ function isRenderPhaseUpdate(fiber: Fiber): boolean {
     (alternate !== null && alternate === currentlyRenderingFiber)
   );
 }
+// 渲染阶段是指组件函数执行的过程。
+// 有时候，在渲染阶段可能会触发状态更新操作。
+// 由于渲染阶段不应该直接修改状态，因此需要将这些更新操作暂存起来，等到当前渲染阶段结束后，再重新渲染组件并应用这些更新。
 
+// 用来处理这种渲染阶段的状态更新的
 function enqueueRenderPhaseUpdate<S, A>(
   queue: UpdateQueue<S, A>,
-  update: Update<S, A>,
+  update: Update<S, A>, //这是一个 Update 对象，表示一个具体的状态更新操作。
 ): void {
-  // This is a render phase update. Stash it in a lazily-created map of
-  // queue -> linked list of updates. After this render pass, we'll restart
-  // and apply the stashed updates on top of the work-in-progress hook.
+  // 标记渲染阶段有更新 表示在当前渲染阶段已经调度了状态更新操作
   didScheduleRenderPhaseUpdateDuringThisPass = didScheduleRenderPhaseUpdate =
     true;
+    // 首先，获取 queue 的 pending 属性，它指向队列中的最后一个更新操作。
   const pending = queue.pending;
   if (pending === null) {
-    // This is the first update. Create a circular list.
+    // 如果 pending 为 null ，说明这是队列中的第一个更新操作。此时，将 update 的 next 属性指向自身，形成一个循环链表。
     update.next = update;
   } else {
+    // 如果 pending 不为 null ，说明队列中已经有其他更新操作。
+    // 此时，将 update 插入到队列的末尾，具体做法是将 update 的 next 属性指向 pending 的下一个更新操作，
+    // 然后将 pending 的 next 属性指向 update 。
     update.next = pending.next;
     pending.next = update;
   }
+  // 最后，将 queue 的 pending 属性指向 update ，表示 update 现在是队列中的最后一个更新操作。
   queue.pending = update;
 }
 
